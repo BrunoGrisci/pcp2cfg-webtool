@@ -203,3 +203,11 @@ If you use this tool in academic work (papers, theses, technical reports, or tea
   note         = {Educational web-based software},
 }
 ```
+
+---
+## 🔄 See also
+
+- **TM → PCP Domino Generator (tm2pcp)**  
+  Webtool: https://brunogrisci.github.io/tm2pcp  
+  Repository: https://github.com/BrunoGrisci/tm2pcp-webtool  
+  tm2pcp builds PCP/MPCP domino sets from Turing Machines (encoding executions as dominoes). The exported `.csv` can be imported directly into pcp2cfg to generate the corresponding CFG and explore ambiguity via derivations and trees.

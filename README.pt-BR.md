@@ -198,8 +198,16 @@ Se usar esta ferramenta em trabalhos acadêmicos (artigos, teses, relatórios t�
 @software{Grisci_pcp2cfg_webtool,
   author       = {Bruno Iochins Grisci},
   title        = {{pcp2cfg-webtool}: Uma Ferramenta Interativa para a Redução PCP para Ambiguidade de GLC},
-  year         = {2026},
+  year         = {2025},
   url          = {https://github.com/BrunoGrisci/pcp2cfg-webtool},
   note         = {Software educacional baseado na web},
 }
 ```
+
+---
+## 🔄 Veja também
+
+- **Gerador de Dominós TM → PCP (tm2pcp)**  
+  Webtool: https://brunogrisci.github.io/tm2pcp  
+  Repositório: https://github.com/BrunoGrisci/tm2pcp-webtool  
+  O tm2pcp constrói conjuntos de dominós de PCP/MPCP a partir de Máquinas de Turing (codificando execuções como dominós). O `.csv` exportado pode ser importado diretamente no pcp2cfg para gerar a GLC correspondente e explorar ambiguidade via derivações e árvores.
