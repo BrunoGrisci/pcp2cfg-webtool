@@ -1,0 +1,2242 @@
+<!-- Bruno Iochins Grisci 2025-2026 — pcp2cfg -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>PCP → CFG Ambiguity (pcp2cfg)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- Optional favicon: reuse your domino icon if you want -->
+  <!-- <link rel="icon" href="images/domino.png"> -->
+
+  <style>
+    :root {
+      --bg: #ffffff;
+      --fg: #222222;
+      --panel-bg: #ffffff;
+      --panel-border: #dddddd;
+      --workspace-border: #bbbbbb;
+      --status-ok: #333333;
+      --status-err: darkred;
+      --small-note: #555555;
+
+      --chip-bg: #f3f4f6;
+      --chip-border: #d1d5db;
+
+      --tree-node-bg: #ffffff;
+      --tree-node-border: #d1d5db;
+      --tree-edge: #9ca3af;
+    }
+
+    body.dark-mode {
+      --bg: #101215;
+      --fg: #e5e7eb;
+      --panel-bg: #111827;
+      --panel-border: #374151;
+      --workspace-border: #4b5563;
+      --status-ok: #e5e7eb;
+      --status-err: #fca5a5;
+      --small-note: #9ca3af;
+
+      --chip-bg: #0f172a;
+      --chip-border: #334155;
+
+      --tree-node-bg: #0b1220;
+      --tree-node-border: #334155;
+      --tree-edge: #64748b;
+    }
+
+    body {
+      font-family: system-ui, sans-serif;
+      margin: 1.5rem;
+      background: var(--bg);
+      color: var(--fg);
+      transition: background 0.2s ease, color 0.2s ease;
+    }
+
+    h1 {
+      font-size: 1.4rem;
+      margin: 0 0 0.5rem 0;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    a { color: inherit; text-decoration: underline; }
+    a:hover { text-decoration: none; }
+
+    .topbar {
+      display: flex;
+      align-items: flex-start;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+    .topbar .spacer { flex: 1 1 auto; }
+
+    .top-right-controls {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-left: auto;
+    }
+
+    .icon-switch {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.35rem;
+      padding: 0.25rem 0.5rem;
+      border: 1px solid var(--panel-border);
+      background: var(--panel-bg);
+      color: var(--fg);
+      border-radius: 999px;
+      cursor: pointer;
+      user-select: none;
+      font-size: 1rem;
+      line-height: 1;
+    }
+    .icon-switch:hover { filter: brightness(0.98); }
+    body.dark-mode .icon-switch:hover { filter: brightness(1.08); }
+    .icon-switch[aria-pressed="true"] {
+      box-shadow: 0 0 0 2px rgba(59,130,246,0.35);
+    }
+
+    .row {
+      display: flex;
+      gap: 1rem;
+      margin: 0.75rem 0 1rem 0;
+      flex-wrap: wrap;
+      align-items: flex-end;
+    }
+
+    label { font-weight: 600; }
+
+    input[type="text"], textarea, input[type="file"] {
+      background: var(--panel-bg);
+      color: var(--fg);
+      border: 1px solid var(--panel-border);
+      border-radius: 0.35rem;
+      padding: 0.35rem 0.5rem;
+    }
+
+    button {
+      padding: 0.45rem 0.85rem;
+      border-radius: 0.5rem;
+      border: 1px solid var(--panel-border);
+      cursor: pointer;
+      background: var(--panel-bg);
+      color: var(--fg);
+    }
+    button:hover { background: #f3f3f3; }
+    body.dark-mode button:hover { background: #1f2937; }
+    button:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    .panel {
+      border: 1px solid var(--panel-border);
+      border-radius: 0.75rem;
+      padding: 0.9rem;
+      background: var(--panel-bg);
+    }
+
+    .split-container {
+      display: flex;
+      gap: 0;
+      margin-top: 1rem;
+      min-height: 300px;
+    }
+
+    #leftPane, #rightPane { min-width: 240px; }
+    .divider {
+      width: 5px;
+      cursor: col-resize;
+      background: var(--panel-border);
+      flex: 0 0 auto;
+    }
+    body.dark-mode .divider { background: #4b5563; }
+
+    .panel h2 {
+      font-size: 1.05rem;
+      margin: 0 0 0.5rem 0;
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+    }
+
+    .small-note {
+      font-size: 0.85rem;
+      color: var(--small-note);
+      margin-top: 0.25rem;
+      line-height: 1.35;
+    }
+
+    #status {
+      margin-top: 0.75rem;
+      white-space: pre-wrap;
+      font-size: 0.95rem;
+    }
+
+    /* ---------- Help modal ---------- */
+    .help-btn {
+      width: 1.35rem;
+      height: 1.35rem;
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      line-height: 1;
+      font-weight: 700;
+      border: 1px solid var(--panel-border);
+      background: var(--panel-bg);
+      color: var(--fg);
+      cursor: pointer;
+      user-select: none;
+    }
+    .help-btn:hover { filter: brightness(0.98); }
+    body.dark-mode .help-btn:hover { filter: brightness(1.08); }
+    .help-btn:focus { outline: 2px solid #60a5fa; outline-offset: 2px; }
+
+    .help-overlay {
+      position: fixed;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0,0,0,0.5);
+      z-index: 9999;
+      padding: 1.25rem;
+    }
+    body.dark-mode .help-overlay { background: rgba(0,0,0,0.65); }
+    .help-overlay.open { display: flex; }
+    body.help-open { overflow: hidden; }
+
+    .help-modal {
+      width: min(900px, 96vw);
+      max-height: min(85vh, 900px);
+      overflow: auto;
+      background: var(--panel-bg);
+      color: var(--fg);
+      border: 1px solid var(--panel-border);
+      border-radius: 0.9rem;
+      box-shadow: 0 16px 50px rgba(0,0,0,0.25);
+    }
+    body.dark-mode .help-modal { box-shadow: 0 20px 60px rgba(0,0,0,0.55); }
+
+    .help-modal-header {
+      position: sticky;
+      top: 0;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.85rem 1rem;
+      background: var(--panel-bg);
+      border-bottom: 1px solid var(--panel-border);
+    }
+    .help-modal-title {
+      font-size: 1.05rem;
+      font-weight: 700;
+      margin: 0;
+    }
+    .help-modal-close {
+      margin-left: auto;
+      width: 2rem;
+      height: 2rem;
+      border-radius: 999px;
+      border: 1px solid var(--panel-border);
+      background: var(--panel-bg);
+      color: var(--fg);
+      cursor: pointer;
+      font-size: 1.05rem;
+      line-height: 1;
+    }
+
+    .help-modal-body {
+      padding: 1rem 1rem 1.15rem 1rem;
+      font-size: 0.95rem;
+      line-height: 1.5;
+    }
+    .help-modal-body h3 { margin: 0.85rem 0 0.35rem 0; font-size: 1rem; }
+    .help-modal-body p { margin: 0.5rem 0; }
+    .help-modal-body ul { margin: 0.35rem 0 0.75rem 1.15rem; }
+    .help-modal-body code {
+      background: rgba(0,0,0,0.06);
+      padding: 0.1rem 0.25rem;
+      border-radius: 0.25rem;
+    }
+    body.dark-mode .help-modal-body code { background: rgba(255,255,255,0.08); }
+
+    /* ---------- Domino editor ---------- */
+    .domino-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.92rem;
+    }
+    .domino-table th, .domino-table td {
+      border: 1px solid var(--panel-border);
+      padding: 0.4rem 0.45rem;
+      vertical-align: top;
+    }
+    .domino-table th {
+      background: rgba(0,0,0,0.03);
+      text-align: left;
+      position: sticky;
+      top: 0;
+    }
+    body.dark-mode .domino-table th { background: rgba(255,255,255,0.05); }
+
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.15rem 0.5rem;
+      border-radius: 999px;
+      border: 1px solid var(--chip-border);
+      background: var(--chip-bg);
+      font-size: 0.85rem;
+      white-space: nowrap;
+    }
+
+    .danger { color: #dc2626; }
+    body.dark-mode .danger { color: #fca5a5; }
+    .good { color: #16a34a; }
+    body.dark-mode .good { color: #86efac; }
+
+    /* ---------- Grammar ---------- */
+    pre.grammar {
+      white-space: pre-wrap;
+      border: 1px dashed var(--workspace-border);
+      border-radius: 0.6rem;
+      padding: 0.75rem;
+      background: rgba(0,0,0,0.02);
+      margin: 0.6rem 0 0.25rem 0;
+      font-size: 0.92rem;
+    }
+    body.dark-mode pre.grammar { background: rgba(255,255,255,0.04); }
+
+    /* ---------- Derivation trees ---------- */
+    .tree-wrap {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+      margin-top: 0.75rem;
+    }
+    .tree-panel {
+      flex: 1 1 320px;
+      min-width: 280px;
+      border: 1px solid var(--panel-border);
+      border-radius: 0.75rem;
+      padding: 0.75rem;
+      background: rgba(0,0,0,0.015);
+    }
+    body.dark-mode .tree-panel { background: rgba(255,255,255,0.03); }
+
+    .tree-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+      margin: 0 0 0.4rem 0;
+      font-weight: 700;
+    }
+
+    .tree {
+      font-size: 0.92rem;
+      overflow-x: auto;
+      padding-bottom: 0.5rem;
+    }
+
+    /* Simple DOM tree layout (UL-based) */
+    .tree ul {
+      padding-top: 18px;
+      position: relative;
+      display: inline-block;
+      padding-left: 0;
+      margin: 0;
+      white-space: nowrap;
+    }
+    .tree li {
+      display: inline-block;
+      text-align: center;
+      list-style-type: none;
+      position: relative;
+      padding: 18px 8px 0 8px;
+      vertical-align: top;
+    }
+    .tree li::before, .tree li::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      right: 50%;
+      border-top: 1px solid var(--tree-edge);
+      width: 50%;
+      height: 18px;
+    }
+    .tree li::after {
+      right: auto;
+      left: 50%;
+      border-left: 1px solid var(--tree-edge);
+      width: 50%;
+    }
+    .tree li:only-child::after, .tree li:only-child::before {
+      display: none;
+    }
+    .tree li:only-child { padding-top: 0; }
+
+    .tree li:first-child::before, .tree li:last-child::after {
+      border: 0 none;
+    }
+    .tree li:last-child::before {
+      border-right: 1px solid var(--tree-edge);
+      border-radius: 0 6px 0 0;
+    }
+    .tree li:first-child::after {
+      border-radius: 6px 0 0 0;
+    }
+
+    .tree li .node {
+      display: inline-block;
+      border: 1px solid var(--tree-node-border);
+      padding: 0.2rem 0.55rem;
+      border-radius: 0.6rem;
+      background: var(--tree-node-bg);
+      min-width: 2.2rem;
+    }
+
+    .tree .node.nonterm { font-weight: 700; }
+    .tree .node.term { font-family: ui-monospace, Menlo, Consolas, monospace; }
+
+    .result-box {
+      margin-top: 0.6rem;
+      border: 1px solid var(--panel-border);
+      border-radius: 0.75rem;
+      padding: 0.6rem 0.75rem;
+    }
+
+    .app-footer {
+      margin-top: 2rem;
+      padding-top: 0.75rem;
+      border-top: 1px solid var(--panel-border);
+      font-size: 0.8rem;
+      color: var(--small-note);
+    }
+    .footer-inner {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+    @media (min-width: 700px) {
+      .footer-inner {
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
+      }
+    }
+
+
+
+    /* ---- Domino palette (tm2pcp-like) ---- */
+    .domino-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      max-height: 340px;      /* same height you had for the table container */
+      overflow-y: auto;
+      padding: 0.25rem;
+    }
+
+    .pcp-domino-item {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+      align-items: center;
+    }
+
+    .pcp-domino-label {
+      font-size: 0.85rem;
+    }
+
+    /* Use the same look/feel as tm2pcp's domino tiles */
+    .pcp-domino-tile {
+      border: 1px solid #aaa;
+      border-radius: 0.4rem;
+      padding: 0.25rem 0.4rem;
+      width: 120px;                 /* a bit wider to fit inputs nicely */
+      font-size: 0.8rem;
+      background: var(--domino-bg, var(--panel-bg));
+      box-shadow: 1px 1px 2px var(--domino-shadow);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      cursor: grab;
+      color: var(--fg);
+      user-select: none;
+    }
+
+    .pcp-domino-tile.dragging {
+      opacity: 0.55;
+    }
+
+    .pcp-domino-tile.dragover {
+      outline: 2px dashed #60a5fa;
+      outline-offset: 2px;
+    }
+
+    .pcp-domino-top, .pcp-domino-bottom {
+      text-align: center;
+      padding: 0.15rem 0.2rem;
+      border-radius: 0.2rem;
+    }
+
+    .pcp-domino-top {
+      border-bottom: 1px solid #ccc;
+      background: #f8f8f8;
+    }
+    body.dark-mode .pcp-domino-top {
+      background: #111827;
+      border-bottom-color: #4b5563;
+    }
+
+    .pcp-domino-bottom {
+      background: #fdfdfd;
+    }
+    body.dark-mode .pcp-domino-bottom {
+      background: #1f2937;
+    }
+
+    /* Inputs inside domino */
+    .pcp-domino-tile input[type="text"] {
+      width: 100%;
+      border: none;
+      outline: none;
+      background: transparent;
+      color: inherit;
+      text-align: center;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      padding: 0.1rem 0;
+    }
+
+    /* Small action row under each tile */
+    .pcp-domino-actions {
+      display: flex;
+      gap: 0.25rem;
+    }
+
+    .pcp-mini-btn {
+      padding: 0.25rem 0.45rem;
+      border-radius: 0.5rem;
+      font-size: 0.85rem;
+    }
+
+    /* ---- Fix: Index symbols overflow ---- */
+    .chip.ai-chip {
+      max-width: 100%;
+      align-items: flex-start;
+    }
+    #aiSummary {
+      display: inline-block;
+      max-width: min(520px, 60vw);
+      overflow-x: auto;           /* scroll instead of overflowing out of the chip */
+      white-space: nowrap;
+      vertical-align: bottom;
+      padding-bottom: 2px;        /* avoids scrollbar touching text */
+    }
+
+
+
+  
+    /* ---- Workspace (tm2pcp-like) ---- */
+    #workspace {
+      border: 1px dashed var(--workspace-border);
+      border-radius: 0.75rem;
+      padding: 0.6rem;
+      min-height: 70px;
+      background: rgba(0,0,0,0.02);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      align-items: flex-start;
+    }
+    body.dark-mode #workspace { background: rgba(255,255,255,0.04); }
+
+    .ws-domino {
+      width: 92px;
+      cursor: grab;
+    }
+    .ws-domino .pcp-domino-top, .ws-domino .pcp-domino-bottom {
+      padding: 0.12rem 0.15rem;
+      font-size: 0.78rem;
+    }
+    .ws-domino.dragover {
+      outline: 2px dashed #60a5fa;
+      outline-offset: 2px;
+    }
+    .ws-domino .ws-actions {
+      display: flex;
+      justify-content: center;
+      gap: 0.25rem;
+      margin-top: 0.25rem;
+    }
+    .ws-mini-btn { padding: 0.2rem 0.4rem; border-radius: 0.5rem; font-size: 0.82rem; }
+
+    #concatStrings {
+      margin-top: 0.65rem;
+      display: grid;
+      gap: 0.45rem;
+    }
+    .concat-row {
+      border: 1px solid var(--panel-border);
+      border-radius: 0.75rem;
+      padding: 0.5rem 0.65rem;
+      overflow-x: auto;
+    }
+    .concat-row .label {
+      font-weight: 700;
+      margin-right: 0.4rem;
+    }
+    .wrap-on .concat-row .mono {
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .wrap-off .concat-row .mono {
+      white-space: pre;
+    }
+
+    /* ---- Solver panel ---- */
+    #solverResult {
+      margin-top: 0.5rem;
+      font-family: ui-monospace, Menlo, Consolas, monospace;
+      white-space: pre-wrap;
+      font-size: 0.85rem;
+    }
+
+  </style>
+</head>
+
+<body>
+  <div class="topbar">
+    <h1>
+      <span data-i18n="title.main">PCP → CFG Ambiguity (pcp2cfg)</span>
+      <button type="button" class="help-btn" data-help="main_tool" aria-label="Help">?</button>
+    </h1>
+
+    <div class="spacer"></div>
+
+    <div class="top-right-controls">
+      <button type="button" id="darkModeSwitch" class="icon-switch" aria-pressed="false">
+        <span id="darkModeIcon" class="icon">☀️</span>
+      </button>
+      <button type="button" id="langSwitch" class="icon-switch" aria-pressed="false">
+        <span id="langIcon" class="icon">🇬🇧</span>
+      </button>
+    </div>
+  </div>
+
+  <div style="margin: 0.25rem 0 0.75rem 0; font-size:0.86rem; line-height:1.35;">
+    <strong data-i18n="about.line1">An interactive tool for the reduction PCP ⇒ CFG Ambiguity.</strong><br />
+    <span data-i18n="about.line2">Build or import a PCP instance (dominoes), generate the grammar G_D, and explore derivations via T and B.</span><br />
+    <em data-i18n="about.note_ai">(Webtool built using Generative AI — ChatGPT)</em>
+  </div>
+
+  <div class="row">
+    <div>
+      <label for="csvFile">
+        <span data-i18n="label.csv_file">Import dominoes (.csv):</span>
+        <button type="button" class="help-btn" data-help="csv_import" aria-label="Help">?</button>
+      </label><br />
+      <input type="file" id="csvFile" accept=".csv" />
+    </div>
+
+    <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+      <button id="addDominoBtn" data-i18n="button.add_domino">Add domino</button>
+      <button id="clearDominoesBtn" data-i18n="button.clear_dominoes">Clear dominoes</button>
+      <button id="exportCsvBtn" data-i18n="button.export_csv">Export CSV</button>
+    </div>
+  </div>
+
+  <div id="status"></div>
+
+  <div class="split-container">
+    <div id="leftPane" class="panel" style="flex: 1 1 45%;">
+      <h2>
+        <span data-i18n="title.dominoes">PCP instance (dominoes)</span>
+        <button type="button" class="help-btn" data-help="dominoes" aria-label="Help">?</button>
+      </h2>
+      <div class="small-note" data-i18n="note.dominoes">
+        Each domino i is a pair (t_i, b_i). The tool assigns a new terminal a_i used as an index marker in the grammar.
+      </div>
+
+  <div id="dominoPalette" class="domino-list" aria-label="Domino palette"></div>
+
+
+      <div class="result-box" style="margin-top:0.75rem;">
+        <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
+          <span class="chip">
+            <strong data-i18n="summary.k">k</strong> =
+            <span id="kCount">0</span>
+          </span>
+          <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
+            <span class="chip ai-chip">
+              <strong data-i18n="summary.ai">Index symbols</strong>:
+              <span id="aiSummary" class="mono">∅</span>
+            </span>
+
+            <span class="chip">
+              <strong data-i18n="summary.prefix">Index prefix</strong>:
+              <span id="aiPrefix" class="mono">–</span>
+            </span>
+          </div>
+
+        </div>
+      </div>
+
+      <h2 style="margin-top:0;">
+        <span data-i18n="title.workspace">Workspace (sequence of dominoes)</span>
+        <button type="button" class="help-btn" data-help="workspace" aria-label="Help">?</button>
+      </h2>
+      <div class="small-note" data-i18n="note.workspace">
+        Drop tiles here in order. You can reorder or delete individual tiles.
+      </div>
+
+      <div id="workspace"></div>
+
+      <div style="margin-top:0.5rem; display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap;">
+        <button id="clearWorkspaceBtn" data-i18n="button.clear_workspace">Clear workspace</button>
+
+        <label style="font-weight:400; cursor:pointer;">
+          <input type="checkbox" id="wrapToggle" checked>
+          <span data-i18n="label.wrap_strings">Wrap strings</span>
+        </label>
+
+        <span class="small-note" data-i18n="note.workspace_sync" style="margin-left:auto;">
+          Sync with the index sequence input below.
+        </span>
+      </div>
+
+      <div id="concatStrings" class="wrap-on"></div>
+
+      
+
+<hr style="margin: 0.85rem 0; border: none; border-top: 1px solid var(--panel-border);" />
+
+      <h2 style="margin-top:0;">
+        <span id="solverTitleText" data-i18n="solver.title_mpcp">MPCP Solver (bounded)</span>
+        <button type="button" class="help-btn" data-help="solver_bounded" aria-label="Help">?</button>
+      </h2>
+      <div class="small-note" data-i18n="solver.note">
+        PCP is undecidable. This solver performs a bounded search and may fail even if a solution exists.
+      </div>
+
+      <div style="display:flex; flex-wrap:wrap; gap:0.6rem; margin-top:0.75rem; align-items:flex-end;">
+        <div>
+          <label for="solverDepth" style="font-weight:600; font-size:0.85rem;">
+            <span data-i18n="solver.depth_label">Max depth:</span>
+            <button type="button" class="help-btn" data-help="solver_max_depth" aria-label="Help">?</button>
+          </label><br>
+          <input type="text" id="solverDepth" value="20" style="min-width:5.5rem;">
+        </div>
+        <div>
+          <label for="solverTime" style="font-weight:600; font-size:0.85rem;">
+            <span data-i18n="solver.time_label">Time limit (ms):</span>
+            <button type="button" class="help-btn" data-help="solver_time_limit" aria-label="Help">?</button>
+          </label><br>
+          <input type="text" id="solverTime" value="1500" style="min-width:7rem;">
+        </div>
+        <div>
+          <label for="solverNodes" style="font-weight:600; font-size:0.85rem;">
+            <span data-i18n="solver.nodes_label">Node limit:</span>
+            <button type="button" class="help-btn" data-help="solver_node_limit" aria-label="Help">?</button>
+          </label><br>
+          <input type="text" id="solverNodes" value="200000" style="min-width:7rem;">
+        </div>
+
+        <div style="display:flex; align-items:center; gap:0.55rem; margin-left:auto;">
+          <label style="font-weight:400; cursor:pointer; font-size:0.9rem;">
+            <input type="checkbox" id="toggleMPCP" checked>
+            <span data-i18n="solver.toggle_mpcp">Use MPCP (force start with 1)</span>
+          </label>
+        </div>
+
+        <div style="display:flex; gap:0.5rem; align-items:center; margin-left:auto;">
+          <button id="solveBtn" data-i18n="solver.solve_btn">Try solve</button>
+          <button id="cancelSolveBtn" data-i18n="solver.cancel_btn" disabled>Cancel</button>
+        </div>
+      </div>
+
+      <div id="solverProgress" class="small-note" style="margin-top:0.5rem;"></div>
+
+      <div style="display:flex; gap:0.5rem; align-items:center; margin-top:0.35rem;">
+        <button id="loadSolutionBtn" data-i18n="solver.load_btn" disabled>Load solution into workspace</button>
+      </div>
+
+      <div id="solverResult"></div>
+
+    </div>
+
+    <div id="divider" class="divider" title="Drag to resize"></div>
+
+    <div id="rightPane" class="panel" style="flex: 1 1 55%;">
+      <h2>
+        <span data-i18n="title.grammar">Generated CFG G_D</span>
+        <button type="button" class="help-btn" data-help="grammar" aria-label="Help">?</button>
+      </h2>
+
+      <div class="small-note" data-i18n="note.grammar">
+        The grammar is constructed from your dominoes using the classical reduction PCP ⇒ AMB_CFG.
+      </div>
+
+      <pre id="grammarBox" class="grammar mono"></pre>
+
+      
+      <hr style="margin: 0.85rem 0; border: none; border-top: 1px solid var(--panel-border);" />
+
+      <h2 style="margin-top:0;">
+        <span data-i18n="title.derivations">Derivation explorer</span>
+        <button type="button" class="help-btn" data-help="derivations" aria-label="Help">?</button>
+      </h2>
+
+      <div class="row" style="margin-top:0.6rem;">
+        <div style="flex: 1 1 280px;">
+          <label for="seqInput">
+            <span data-i18n="label.sequence">Index sequence (e.g., 1,3,2):</span>
+            <button type="button" class="help-btn" data-help="sequence" aria-label="Help">?</button>
+          </label><br />
+          <input type="text" id="seqInput" placeholder="1,2,1" style="width:min(420px, 100%);" />
+          <div class="small-note" data-i18n="note.sequence">
+            This builds two derivations: S⇒T⇒* and S⇒B⇒*. Matching outputs witness ambiguity.
+          </div>
+        </div>
+
+        <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+          <button id="toWorkspaceBtn" data-i18n="button.seq_to_workspace">Sequence → Workspace</button>
+          <button id="fromWorkspaceBtn" data-i18n="button.workspace_to_seq">Workspace → Sequence</button>
+          <button id="buildDerivBtn" data-i18n="button.build_derivation">Build derivations</button>
+          <button id="exampleBtn" data-i18n="button.load_example">Load example</button>
+        </div>
+      </div>
+
+      <div class="result-box">
+        <div style="display:flex; gap:0.6rem; align-items:center; flex-wrap:wrap;">
+          <span class="chip">
+            <span data-i18n="result.top_concat">Top concat</span>:
+            <span id="topConcat" class="mono">–</span>
+          </span>
+          <span class="chip">
+            <span data-i18n="result.bottom_concat">Bottom concat</span>:
+            <span id="bottomConcat" class="mono">–</span>
+          </span>
+          <span class="chip">
+            <span data-i18n="result.word_T">Word via T</span>:
+            <span id="wordT" class="mono">–</span>
+          </span>
+          <span class="chip">
+            <span data-i18n="result.word_B">Word via B</span>:
+            <span id="wordB" class="mono">–</span>
+          </span>
+        </div>
+
+        <div id="matchLine" class="small-note" style="margin-top:0.55rem;"></div>
+      </div>
+
+      <div class="tree-wrap">
+        <div class="tree-panel">
+          <div class="tree-title">
+            <span class="mono">S ⇒ T ⇒* …</span>
+            <span class="chip"><span data-i18n="tree.label">Tree</span> T</span>
+          </div>
+          <div id="treeT" class="tree"></div>
+        </div>
+
+        <div class="tree-panel">
+          <div class="tree-title">
+            <span class="mono">S ⇒ B ⇒* …</span>
+            <span class="chip"><span data-i18n="tree.label">Tree</span> B</span>
+          </div>
+          <div id="treeB" class="tree"></div>
+        </div>
+      </div>
+
+      <div class="small-note" data-i18n="note.undecidable" style="margin-top:0.75rem;">
+        Reminder: this tool does not decide PCP or CFG ambiguity. It helps you explore the reduction and witness ambiguity when a solution is found.
+      </div>
+    </div>
+  </div>
+
+  <!-- Help modal overlay -->
+  <div id="helpOverlay" class="help-overlay" role="dialog" aria-modal="true" aria-hidden="true">
+    <div class="help-modal" role="document">
+      <div class="help-modal-header">
+        <h3 id="helpTitle" class="help-modal-title"></h3>
+        <button type="button" id="helpCloseBtn" class="help-modal-close" aria-label="Close">
+          <span aria-hidden="true">✕</span>
+        </button>
+      </div>
+      <div id="helpBody" class="help-modal-body"></div>
+    </div>
+  </div>
+
+  <!-- i18n -->
+  <script src="pcp2cfg_i18n_updated.js"></script>
+
+  <script>
+    // -----------------------------
+    // State
+    // -----------------------------
+    let dominoes = []; // { id: number, top: string, bottom: string }
+    let workspaceSeq = []; // array of domino indices (1..k), in order
+
+    function addToWorkspace(idx) {
+      const n = parseInt(idx, 10);
+      if (!Number.isFinite(n)) return;
+      if (n < 1 || n > dominoes.length) return;
+      workspaceSeq.push(n);
+      renderWorkspace();
+      concatWorkspaceStrings();
+    }
+
+    let workspaceDndInitialized = false;
+    function initWorkspaceDnD() {
+      const ws = document.getElementById("workspace");
+      if (!ws || workspaceDndInitialized) return;
+      workspaceDndInitialized = true;
+
+      ws.addEventListener("dragover", (ev) => {
+        ev.preventDefault();
+        ev.dataTransfer.dropEffect = "move";
+      });
+
+      ws.addEventListener("drop", (ev) => {
+        ev.preventDefault();
+        const data = ev.dataTransfer.getData("text/plain");
+        const n = parseInt(data, 10);
+        if (!Number.isFinite(n)) return;
+        addToWorkspace(n);
+      });
+    }
+
+    let lastSolverSolution = null;
+    let solverRunning = false;
+    let solverCancelRequested = false;
+    let currentHelpId = null;
+
+    let grammarRefreshTimer = null;
+
+    function refreshDominoMetaUI() {
+      // Update index prefix + a_i list + domino labels WITHOUT re-rendering inputs (keeps focus stable).
+      const k = dominoes.length;
+      const prefix = chooseIndexPrefix(dominoes);
+
+      const ai = indexSymbols(k, prefix);
+      const aiSummaryEl = document.getElementById("aiSummary");
+      if (aiSummaryEl) aiSummaryEl.textContent = ai.length ? ai.join(", ") : "∅";
+
+      const prefixEl = document.getElementById("aiPrefix");
+      if (prefixEl) prefixEl.textContent = prefix || "–";
+
+      // Update each label chip above the domino tiles
+      document.querySelectorAll(".pcp-domino-label").forEach((el) => {
+        const idStr = el.dataset.dominoId;
+        const id = parseInt(idStr, 10);
+        if (!Number.isFinite(id)) return;
+        el.textContent = `i=${id}  |  ${prefix}${id}`;
+      });
+    }
+
+    function scheduleGrammarRefresh() {
+      // Debounced "soft refresh" while typing:
+      // - updates grammar
+      // - updates prefix chips/labels
+      // - does NOT re-render the palette, so typing isn't interrupted.
+      if (grammarRefreshTimer) clearTimeout(grammarRefreshTimer);
+      grammarRefreshTimer = setTimeout(() => {
+        refreshGrammarBox();
+        refreshDominoMetaUI();
+        grammarRefreshTimer = null;
+      }, 250); // 250–400ms feels good for typing
+    }
+
+
+
+    // -----------------------------
+    // Utilities
+    // -----------------------------
+    function escapeHtml(str) {
+      return String(str ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+    }
+
+    function showStatus(msg, isError = false) {
+      const st = document.getElementById("status");
+      st.textContent = msg || "";
+      const dark = document.body.classList.contains("dark-mode");
+      st.style.color = isError ? (dark ? "#fca5a5" : "darkred")
+                              : (dark ? "#e5e7eb" : "#333333");
+    }
+
+    function setStatusFromKey(key, params = {}, isError = false) {
+      if (!key) return showStatus("", false);
+      showStatus(window.t(key, params), isError);
+    }
+
+    function normalizeDominoString(s) {
+      // Keep it simple and deterministic:
+      // - trim outer whitespace
+      // - keep inner spaces (if user wants them as terminals)
+      // You can later enforce an alphabet, but for teaching the reduction
+      // this “raw string” is often convenient.
+      return String(s ?? "").trim();
+    }
+
+    function allTextOfDominoes(which) {
+      // which in {"top","bottom"}
+      return dominoes.map(d => (which === "top" ? d.top : d.bottom)).join("");
+    }
+
+    function indexSymbols(k, prefix) {
+      if (k <= 0) return [];
+      const res = [];
+      for (let i = 1; i <= k; i++) res.push(prefix + i);
+      return res;
+    }
+
+
+    function containsForbiddenAi(dominoesLocal) {
+      // We want a_i to be fresh terminals not appearing inside any t_i or b_i.
+      // For simplicity, we reject if any substring "a<number>" appears.
+      // (This is stricter than needed, but keeps the reduction clean in a teaching tool.)
+      const text = dominoesLocal.map(d => d.top + " " + d.bottom).join(" ");
+      return /a\d+/.test(text);
+    }
+
+    function csvEscape(value) {
+      const s = String(value ?? "");
+      if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+      return s;
+    }
+
+    function parseCsv(text) {
+      // Minimal CSV: expects header domino_id,top_string,bottom_string (like tm2pcp export)
+      // Robust enough for quoted fields with commas.
+      const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
+      if (lines.length === 0) return [];
+
+      // parse a CSV line into fields
+      function parseLine(line) {
+        const out = [];
+        let cur = "";
+        let inQ = false;
+        for (let i = 0; i < line.length; i++) {
+          const ch = line[i];
+          if (inQ) {
+            if (ch === '"') {
+              if (i + 1 < line.length && line[i + 1] === '"') {
+                cur += '"';
+                i++;
+              } else {
+                inQ = false;
+              }
+            } else {
+              cur += ch;
+            }
+          } else {
+            if (ch === '"') inQ = true;
+            else if (ch === ",") { out.push(cur); cur = ""; }
+            else cur += ch;
+          }
+        }
+        out.push(cur);
+        return out.map(s => s.trim());
+      }
+
+      const header = parseLine(lines[0]).map(h => h.toLowerCase());
+      const iTop = header.indexOf("top_string");
+      const iBottom = header.indexOf("bottom_string");
+      if (iTop < 0 || iBottom < 0) {
+        throw new Error(window.t("status.csv_bad_header"));
+      }
+
+      const res = [];
+      for (let i = 1; i < lines.length; i++) {
+        const f = parseLine(lines[i]);
+        const top = normalizeDominoString(f[iTop] ?? "");
+        const bottom = normalizeDominoString(f[iBottom] ?? "");
+        if (top.length === 0 && bottom.length === 0) continue;
+        res.push({ id: res.length + 1, top, bottom });
+      }
+      return res;
+    }
+
+    function collectDominoText(dominoesLocal) {
+      return dominoesLocal.map(d => (d.top ?? "") + " " + (d.bottom ?? "")).join(" ");
+    }
+
+    function tokenAppears(text, token) {
+      // literal substring match is fine for terminals-as-raw-strings UX
+      // we also check with a boundary-ish rule for prefix+digits patterns
+      return text.includes(token);
+    }
+
+    function prefixCollidesWithDigits(text, prefix) {
+      // collision means something like `${prefix}1`, `${prefix}23`, etc appears
+      // (use a simple regex; escape prefix for regex)
+      const esc = prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const re = new RegExp(esc + "\\d+");
+      return re.test(text);
+    }
+
+    function chooseIndexPrefix(dominoesLocal) {
+      const text = collectDominoText(dominoesLocal);
+
+      // Ordered candidates: keep short ones first, then longer fallbacks
+      const candidates = [
+        "a", "A", "z", "x", "m", "q",
+        "_a", "_i", "idx", "id", "k",
+        "tag", "sym", "mark", "p",
+        "α", "β", "γ"
+      ];
+
+      // Try candidates, then add numbered variants if needed
+      for (const base of candidates) {
+        if (!prefixCollidesWithDigits(text, base)) return base;
+      }
+
+      // If somehow everything collides, generate base+"_" + randomish suffix deterministically
+      // (still stable across refreshes for same instance if based on length + content hash)
+      const seed = String(text.length) + ":" + text;
+      let h = 0;
+      for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
+      for (let n = 0; n < 1000; n++) {
+        const base = "idx_" + ((h + n) % 100000).toString(36);
+        if (!prefixCollidesWithDigits(text, base)) return base;
+      }
+
+      // Last resort (extremely unlikely)
+      return "idx";
+    }
+
+
+
+    // -----------------------------
+    // Dark mode + language (tm2pcp-like)
+    // -----------------------------
+    function applyDarkModeFromStorage() {
+      const saved = localStorage.getItem("pcp2cfg-dark-mode");
+      const isDark = saved === "true";
+      document.body.classList.toggle("dark-mode", isDark);
+      refreshDarkModeSwitchUI();
+    }
+
+    function toggleDarkMode(enabled) {
+      document.body.classList.toggle("dark-mode", enabled);
+      localStorage.setItem("pcp2cfg-dark-mode", enabled ? "true" : "false");
+      refreshDarkModeSwitchUI();
+      // keep status color consistent
+      const txt = document.getElementById("status")?.textContent;
+      if (txt) showStatus(txt, false);
+    }
+
+    function getCurrentLang() {
+      const saved = localStorage.getItem("pcp2cfg-lang");
+      if (saved) return saved;
+      return document.documentElement.lang || "en";
+    }
+
+    function setCurrentLang(lang) {
+      localStorage.setItem("pcp2cfg-lang", lang);
+    }
+
+    function refreshLangSwitchUI() {
+      const lang = getCurrentLang();
+      const btn = document.getElementById("langSwitch");
+      const icon = document.getElementById("langIcon");
+      if (!btn || !icon) return;
+      const isPT = (lang === "pt-BR");
+      btn.setAttribute("aria-pressed", isPT ? "true" : "false");
+      icon.textContent = isPT ? "🇧🇷" : "🇬🇧";
+    }
+
+    function refreshDarkModeSwitchUI() {
+      const isDark = document.body.classList.contains("dark-mode");
+      const btn = document.getElementById("darkModeSwitch");
+      const icon = document.getElementById("darkModeIcon");
+      if (!btn || !icon) return;
+      btn.setAttribute("aria-pressed", isDark ? "true" : "false");
+      icon.textContent = isDark ? "🌙" : "☀️";
+    }
+
+    // -----------------------------
+    // Help modal (tm2pcp-like)
+    // -----------------------------
+    function isHelpOpen() {
+      const ov = document.getElementById("helpOverlay");
+      return !!(ov && ov.classList.contains("open"));
+    }
+
+    function renderHelpModal() {
+      if (!currentHelpId) return;
+      const titleEl = document.getElementById("helpTitle");
+      const bodyEl = document.getElementById("helpBody");
+      if (!titleEl || !bodyEl || typeof window.t !== "function") return;
+
+      titleEl.textContent = window.t(`help.${currentHelpId}.title`);
+      bodyEl.innerHTML = window.t(`help.${currentHelpId}.body_html`);
+    }
+
+    window.refreshHelpModal = function refreshHelpModal() {
+      if (isHelpOpen()) renderHelpModal();
+    };
+
+    function openHelp(helpId) {
+      const ov = document.getElementById("helpOverlay");
+      if (!ov) return;
+      currentHelpId = helpId;
+      renderHelpModal();
+      ov.classList.add("open");
+      ov.setAttribute("aria-hidden", "false");
+      document.body.classList.add("help-open");
+
+      const closeBtn = document.getElementById("helpCloseBtn");
+      if (closeBtn) closeBtn.focus();
+    }
+
+    function closeHelp() {
+      const ov = document.getElementById("helpOverlay");
+      if (!ov) return;
+      ov.classList.remove("open");
+      ov.setAttribute("aria-hidden", "true");
+      document.body.classList.remove("help-open");
+      currentHelpId = null;
+    }
+
+    document.addEventListener("click", (ev) => {
+      const target = ev.target;
+      const btn = target && (target.closest ? target.closest(".help-btn") : null);
+      if (btn && btn.dataset && btn.dataset.help) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        openHelp(btn.dataset.help);
+        return;
+      }
+      const closeBtn = target && (target.closest ? target.closest("#helpCloseBtn") : null);
+      if (closeBtn) {
+        ev.preventDefault();
+        closeHelp();
+        return;
+      }
+      const overlay = document.getElementById("helpOverlay");
+      if (overlay && target === overlay && isHelpOpen()) closeHelp();
+    });
+
+    document.addEventListener("keydown", (ev) => {
+      if (ev.key === "Escape" && isHelpOpen()) {
+        ev.preventDefault();
+        closeHelp();
+      }
+    });
+
+    // -----------------------------
+    // Domino editor rendering
+    // -----------------------------
+    function moveDomino(fromIdx, toIdx) {
+      if (fromIdx === toIdx) return;
+      if (fromIdx < 0 || fromIdx >= dominoes.length) return;
+      if (toIdx < 0 || toIdx >= dominoes.length) return;
+
+      const [item] = dominoes.splice(fromIdx, 1);
+      dominoes.splice(toIdx, 0, item);
+
+      // Reassign ids 1..k (since the reduction uses i=1..k)
+      dominoes = dominoes.map((x, idx) => ({ id: idx + 1, top: x.top, bottom: x.bottom }));
+      onDominoesChanged(true);
+    }
+
+    let dragFromIndex = null;
+
+    function renderDominoPalette() {
+      const palette = document.getElementById("dominoPalette");
+      palette.innerHTML = "";
+
+      for (let idx = 0; idx < dominoes.length; idx++) {
+        const d = dominoes[idx];
+
+        const wrapper = document.createElement("div");
+        wrapper.className = "pcp-domino-item";
+
+        // Label ABOVE tile
+        const label = document.createElement("div");
+        label.className = "chip mono pcp-domino-label";
+        label.dataset.dominoId = String(d.id);
+        const prefix = chooseIndexPrefix(dominoes);
+        label.textContent = `i=${d.id}  |  ${prefix}${d.id}`;
+        wrapper.appendChild(label);
+
+
+        // Allow adding to workspace by double-click (tm2pcp-like)
+        label.setAttribute("draggable", "true");
+        label.addEventListener("dragstart", (ev) => {
+          ev.dataTransfer.effectAllowed = "move";
+          ev.dataTransfer.setData("text/plain", String(d.id));
+        });
+        label.addEventListener("dblclick", () => addToWorkspace(d.id));
+        // Tile (draggable)
+        const tile = document.createElement("div");
+        tile.className = "pcp-domino-tile";
+        tile.setAttribute("draggable", "true");
+        tile.dataset.index = String(idx);
+
+
+        tile.addEventListener("dblclick", (ev) => {
+          // avoid double-click on input selecting text; still add to workspace
+          addToWorkspace(d.id);
+        });
+        // Top area
+        const topBox = document.createElement("div");
+        topBox.className = "pcp-domino-top";
+        const topInput = document.createElement("input");
+        topInput.type = "text";
+        topInput.value = d.top;
+        topInput.setAttribute("aria-label", `top string t${d.id}`);
+        topBox.appendChild(topInput);
+        tile.appendChild(topBox);
+
+        // Bottom area
+        const bottomBox = document.createElement("div");
+        bottomBox.className = "pcp-domino-bottom";
+        const bottomInput = document.createElement("input");
+        bottomInput.type = "text";
+        bottomInput.value = d.bottom;
+        bottomInput.setAttribute("aria-label", `bottom string b${d.id}`);
+        bottomBox.appendChild(bottomInput);
+        tile.appendChild(bottomBox);
+
+        // Input behavior: update data, but DO NOT rerender on each keystroke
+        topInput.addEventListener("input", () => {
+          d.top = normalizeDominoString(topInput.value);
+          scheduleGrammarRefresh();
+        });
+        bottomInput.addEventListener("input", () => {
+          d.bottom = normalizeDominoString(bottomInput.value);
+          scheduleGrammarRefresh();
+        });
+
+        // Optional: commit + rerender only when the user finishes editing
+        topInput.addEventListener("blur", () => onDominoesChanged(false));
+        bottomInput.addEventListener("blur", () => onDominoesChanged(false));
+
+        // Drag & drop reorder
+        tile.addEventListener("dragstart", (ev) => {
+          dragFromIndex = idx;
+          tile.classList.add("dragging");
+          ev.dataTransfer.effectAllowed = "move";
+          // allow dropping into Workspace
+          ev.dataTransfer.setData("text/plain", String(d.id));
+        });
+        tile.addEventListener("dragend", () => {
+          tile.classList.remove("dragging");
+          dragFromIndex = null;
+          palette.querySelectorAll(".pcp-domino-tile.dragover").forEach(el => el.classList.remove("dragover"));
+        });
+
+        tile.addEventListener("dragover", (ev) => {
+          ev.preventDefault();
+          tile.classList.add("dragover");
+          ev.dataTransfer.dropEffect = "move";
+        });
+        tile.addEventListener("dragleave", () => tile.classList.remove("dragover"));
+
+        tile.addEventListener("drop", (ev) => {
+          ev.preventDefault();
+          tile.classList.remove("dragover");
+          const to = idx;
+          if (dragFromIndex != null && dragFromIndex !== to) moveDomino(dragFromIndex, to);
+        });
+
+        wrapper.appendChild(tile);
+
+        // Action buttons (accessible reorder)
+        const actions = document.createElement("div");
+        actions.className = "pcp-domino-actions";
+
+        const upBtn = document.createElement("button");
+        upBtn.className = "pcp-mini-btn";
+        upBtn.textContent = "↑";
+        upBtn.title = window.t("button.move_up") || "Move up";
+        upBtn.disabled = (idx === 0);
+        upBtn.addEventListener("click", () => moveDomino(idx, idx - 1));
+
+        const downBtn = document.createElement("button");
+        downBtn.className = "pcp-mini-btn";
+        downBtn.textContent = "↓";
+        downBtn.title = window.t("button.move_down") || "Move down";
+        downBtn.disabled = (idx === dominoes.length - 1);
+        downBtn.addEventListener("click", () => moveDomino(idx, idx + 1));
+
+        const delBtn = document.createElement("button");
+        delBtn.className = "pcp-mini-btn";
+        delBtn.textContent = window.t("button.delete");
+        delBtn.addEventListener("click", () => {
+          dominoes.splice(idx, 1);
+          dominoes = dominoes.map((x, i) => ({ id: i + 1, top: x.top, bottom: x.bottom }));
+          onDominoesChanged(true);
+        });
+
+        actions.appendChild(upBtn);
+        actions.appendChild(downBtn);
+        actions.appendChild(delBtn);
+
+        wrapper.appendChild(actions);
+        palette.appendChild(wrapper);
+      }
+
+      // Summary
+      const k = dominoes.length;
+      document.getElementById("kCount").textContent = String(k);
+
+      const prefix = chooseIndexPrefix(dominoes);
+      const ai = indexSymbols(k, prefix);
+      document.getElementById("aiSummary").textContent = ai.length ? ai.join(", ") : "∅";
+
+      const prefixSpan = document.getElementById("aiPrefix");
+      if (prefixSpan) prefixSpan.textContent = prefix || "–";
+      //document.getElementById("aiSummary").textContent = ai.length ? ai.join(", ") : "∅";
+
+
+    
+
+    }
+
+// -----------------------------
+    // Workspace (sequence of dominoes)
+    // -----------------------------
+    function setWrapMode(enabled) {
+      const cs = document.getElementById("concatStrings");
+      if (!cs) return;
+      cs.classList.toggle("wrap-on", enabled);
+      cs.classList.toggle("wrap-off", !enabled);
+    }
+
+    function workspaceToSequenceString(seq) {
+      return seq.join(",");
+    }
+
+    function sequenceStringToWorkspace(s) {
+      const seq = parseIndexSequence(s);
+      if (seq === null) return null;
+      return seq;
+    }
+
+    function clearWorkspace() {
+      workspaceSeq = [];
+      renderWorkspace();
+      concatWorkspaceStrings();
+    }
+
+    function concatWorkspaceStrings() {
+      const cs = document.getElementById("concatStrings");
+      if (!cs) return;
+      if (workspaceSeq.length === 0) {
+        cs.innerHTML = "";
+        return;
+      }
+      let top = "";
+      let bottom = "";
+      for (const idx of workspaceSeq) {
+        const d = dominoes[idx - 1];
+        if (!d) continue;
+        top += d.top;
+        bottom += d.bottom;
+      }
+      cs.innerHTML = `
+        <div class="concat-row"><span class="label" data-i18n="workspace.top">Top</span> <span class="mono">${escapeHtml(top || "ε")}</span></div>
+        <div class="concat-row"><span class="label" data-i18n="workspace.bottom">Bottom</span> <span class="mono">${escapeHtml(bottom || "ε")}</span></div>
+      `;
+      // ensure translated labels after re-render
+      if (typeof window.applyI18n === "function") window.applyI18n();
+    }
+
+    function renderWorkspace() {
+      const ws = document.getElementById("workspace");
+      if (!ws) return;
+      ws.innerHTML = "";
+
+      let wsDragFrom = null;
+
+      const prefix = chooseIndexPrefix(dominoes);
+
+      workspaceSeq.forEach((dominoIdx, pos) => {
+        const d = dominoes[dominoIdx - 1];
+        if (!d) return;
+
+        const wrap = document.createElement("div");
+        wrap.className = "pcp-domino-item";
+
+        const label = document.createElement("div");
+        label.className = "chip mono pcp-domino-label";
+        label.textContent = `${pos + 1}: i=${dominoIdx}`;
+        wrap.appendChild(label);
+
+        const tile = document.createElement("div");
+        tile.className = "pcp-domino-tile ws-domino";
+        tile.setAttribute("draggable", "true");
+
+        const topBox = document.createElement("div");
+        topBox.className = "pcp-domino-top";
+        topBox.textContent = d.top || "ε";
+        tile.appendChild(topBox);
+
+        const bottomBox = document.createElement("div");
+        bottomBox.className = "pcp-domino-bottom";
+        bottomBox.textContent = d.bottom || "ε";
+        tile.appendChild(bottomBox);
+
+        tile.addEventListener("dragstart", (ev) => {
+          wsDragFrom = pos;
+          tile.classList.add("dragging");
+          ev.dataTransfer.effectAllowed = "move";
+          ev.dataTransfer.setData("text/plain", String(dominoIdx));
+        });
+        tile.addEventListener("dragend", () => {
+          tile.classList.remove("dragging");
+          wsDragFrom = null;
+          ws.querySelectorAll(".ws-domino.dragover").forEach(el => el.classList.remove("dragover"));
+        });
+        tile.addEventListener("dragover", (ev) => {
+          ev.preventDefault();
+          tile.classList.add("dragover");
+          ev.dataTransfer.dropEffect = "move";
+        });
+        tile.addEventListener("dragleave", () => tile.classList.remove("dragover"));
+        tile.addEventListener("drop", (ev) => {
+          ev.preventDefault();
+          tile.classList.remove("dragover");
+          if (wsDragFrom == null) return;
+          const to = pos;
+          if (to === wsDragFrom) return;
+          const [it] = workspaceSeq.splice(wsDragFrom, 1);
+          workspaceSeq.splice(to, 0, it);
+          renderWorkspace();
+          concatWorkspaceStrings();
+        });
+
+        wrap.appendChild(tile);
+
+        const actions = document.createElement("div");
+        actions.className = "ws-actions";
+
+        const del = document.createElement("button");
+        del.className = "ws-mini-btn";
+        del.textContent = "✕";
+        del.title = window.t("button.delete") || "Delete";
+        del.addEventListener("click", () => {
+          workspaceSeq.splice(pos, 1);
+          renderWorkspace();
+          concatWorkspaceStrings();
+        });
+
+        actions.appendChild(del);
+        wrap.appendChild(actions);
+
+        ws.appendChild(wrap);
+      });
+    }
+
+    function sendWorkspaceToSeqInput() {
+      const seqEl = document.getElementById("seqInput");
+      if (!seqEl) return;
+      seqEl.value = ""; // clear destination first
+      seqEl.value = workspaceToSequenceString(workspaceSeq);
+      // Clear any previous derivations (to avoid mismatch confusion)
+      setStatusFromKey("status.workspace_to_seq", {}, false);
+    }
+
+    function sendSeqInputToWorkspace() {
+      const seqEl = document.getElementById("seqInput");
+      if (!seqEl) return;
+      const seq = sequenceStringToWorkspace(seqEl.value);
+      if (seq === null) {
+        setStatusFromKey("status.bad_sequence", {}, true);
+        return;
+      }
+      // Validate indices
+      const k = dominoes.length;
+      for (const idx of seq) {
+        if (idx < 1 || idx > k) {
+          setStatusFromKey("status.sequence_out_of_range", { K: k }, true);
+          return;
+        }
+      }
+      // Clear destination first
+      workspaceSeq = [];
+      workspaceSeq = seq.slice();
+      renderWorkspace();
+      concatWorkspaceStrings();
+      setStatusFromKey("status.seq_to_workspace", {}, false);
+    }
+
+
+// -----------------------------
+    // Grammar construction (the reduction)
+    // -----------------------------
+    function buildGrammarText() {
+      const k = dominoes.length;
+      if (k === 0) return window.t("grammar.empty");
+
+      const prefix = chooseIndexPrefix(dominoes);
+
+      const lines = [];
+      lines.push("S -> T | B");
+
+      // T rules
+      const tParts = [];
+      for (let i = 1; i <= k; i++) {
+        const ti = dominoes[i - 1].top;
+        tParts.push(`${ti} T ${prefix}${i}`);
+      }
+      for (let i = 1; i <= k; i++) {
+        const ti = dominoes[i - 1].top;
+        tParts.push(`${ti} ${prefix}${i}`);
+      }
+      lines.push("T -> " + tParts.join(" | "));
+
+      // B rules
+      const bParts = [];
+      for (let i = 1; i <= k; i++) {
+        const bi = dominoes[i - 1].bottom;
+        bParts.push(`${bi} B ${prefix}${i}`);
+      }
+      for (let i = 1; i <= k; i++) {
+        const bi = dominoes[i - 1].bottom;
+        bParts.push(`${bi} ${prefix}${i}`);
+      }
+      lines.push("B -> " + bParts.join(" | "));
+
+      // Optional: show which prefix was chosen (nice teaching touch)
+      lines.push("");
+      lines.push(`# index symbols: ${prefix}1, ${prefix}2, ..., ${prefix}${k}`);
+
+      return lines.join("\n");
+    }
+
+
+    function refreshGrammarBox() {
+      const box = document.getElementById("grammarBox");
+      box.textContent = buildGrammarText();
+    }
+
+    // -----------------------------
+    // Derivation builder (sequence i1..in)
+    // -----------------------------
+    function parseIndexSequence(s) {
+      const raw = String(s ?? "").trim();
+      if (raw.length === 0) return [];
+      const parts = raw.split(/[\s,;]+/).filter(x => x.length > 0);
+      const out = [];
+      for (const p of parts) {
+        const n = parseInt(p, 10);
+        if (!Number.isFinite(n) || n <= 0) return null;
+        out.push(n);
+      }
+      return out;
+    }
+
+    function deriveWordVia(which, seq) {
+      let leftConcat = "";
+      for (const idx of seq) {
+        const d = dominoes[idx - 1];
+        leftConcat += (which === "T" ? d.top : d.bottom);
+      }
+
+      const idxPrefix = chooseIndexPrefix(dominoes);
+      let suffix = "";
+      for (let j = seq.length - 1; j >= 0; j--) {
+        suffix += idxPrefix + seq[j];
+      }
+      return leftConcat + suffix;
+    }
+
+
+    function concatTopBottom(seq) {
+      let top = "";
+      let bottom = "";
+      for (const idx of seq) {
+        const d = dominoes[idx - 1];
+        top += d.top;
+        bottom += d.bottom;
+      }
+      return { top, bottom };
+    }
+
+    // Build a (deterministic) derivation tree for the chosen sequence.
+    // We render the “chain form” consistent with applying:
+    //   T -> t_i T a_i (repeated) then T -> t_i a_i (base)
+    //
+    // Tree shape:
+    //   S
+    //   └─ T
+    //      ├─ t_{i1} (as terminals, grouped in one node)
+    //      ├─ T
+    //      └─ a_{i1}
+    // and the inner T expands similarly…
+    //
+    function buildDerivationTree(which, seq) {
+      // returns a nested object:
+      // { label, kind: 'nonterm'|'term', children: [...] }
+      const root = { label: "S", kind: "nonterm", children: [] };
+      const top = { label: which, kind: "nonterm", children: [] };
+      root.children.push(top);
+
+      function termNode(text) {
+        return { label: text, kind: "term", children: [] };
+      }
+      function nontermNode(lbl) {
+        return { label: lbl, kind: "nonterm", children: [] };
+      }
+
+      // Build recursive chain for T/B
+      function expandAt(pos) {
+        const idx = seq[pos];
+        const d = dominoes[idx - 1];
+        const leftStr = (which === "T" ? d.top : d.bottom);
+        const prefix = chooseIndexPrefix(dominoes);
+        const ai = prefix + idx;
+
+
+        // If last: use base rule: which -> x a_i
+        if (pos === seq.length - 1) {
+          return [
+            termNode(leftStr),
+            termNode(ai)
+          ];
+        }
+
+        // Otherwise: which -> x which a_i
+        const inner = nontermNode(which);
+        inner.children = expandAt(pos + 1);
+
+        return [
+          termNode(leftStr),
+          inner,
+          termNode(ai)
+        ];
+      }
+
+      if (seq.length === 0) {
+        // No derivation (PCP requires non-empty solution; for explorer we just show S->T/B)
+        top.children = [];
+      } else {
+        top.children = expandAt(0);
+      }
+
+      return root;
+    }
+
+    function renderTree(containerEl, node) {
+      // UL-based tree
+      function renderNode(n) {
+        const li = document.createElement("li");
+
+        const div = document.createElement("div");
+        div.className = "node " + (n.kind === "nonterm" ? "nonterm" : "term");
+        div.textContent = n.label;
+        li.appendChild(div);
+
+        if (n.children && n.children.length > 0) {
+          const ul = document.createElement("ul");
+          for (const ch of n.children) {
+            ul.appendChild(renderNode(ch));
+          }
+          li.appendChild(ul);
+        }
+        return li;
+      }
+
+      containerEl.innerHTML = "";
+      const wrapper = document.createElement("div");
+      wrapper.className = "tree";
+      const ul = document.createElement("ul");
+      ul.appendChild(renderNode(node));
+      wrapper.appendChild(ul);
+      containerEl.appendChild(wrapper);
+    }
+
+    function buildDerivationsFromUI() {
+      if (dominoes.length === 0) {
+        setStatusFromKey("status.need_dominoes", {}, true);
+        return;
+      }
+
+      const seq = parseIndexSequence(document.getElementById("seqInput")?.value);
+      if (seq === null) {
+        setStatusFromKey("status.bad_sequence", {}, true);
+        return;
+      }
+      if (seq.length === 0) {
+        setStatusFromKey("status.empty_sequence", {}, true);
+        return;
+      }
+
+      // Validate indices
+      const k = dominoes.length;
+      for (const idx of seq) {
+        if (idx < 1 || idx > k) {
+          setStatusFromKey("status.sequence_out_of_range", { K: k }, true);
+          return;
+        }
+      }
+
+      const { top, bottom } = concatTopBottom(seq);
+      const wT = deriveWordVia("T", seq);
+      const wB = deriveWordVia("B", seq);
+
+      document.getElementById("topConcat").textContent = top || "ε";
+      document.getElementById("bottomConcat").textContent = bottom || "ε";
+      document.getElementById("wordT").textContent = wT || "ε";
+      document.getElementById("wordB").textContent = wB || "ε";
+
+      const match = (wT === wB);
+      const matchLine = document.getElementById("matchLine");
+      matchLine.innerHTML = match
+        ? `<span class="good"><strong>${escapeHtml(window.t("result.match_yes"))}</strong></span> ${escapeHtml(window.t("result.match_explain_yes"))}`
+        : `<span class="danger"><strong>${escapeHtml(window.t("result.match_no"))}</strong></span> ${escapeHtml(window.t("result.match_explain_no"))}`;
+
+      // Trees
+      const treeT = buildDerivationTree("T", seq);
+      const treeB = buildDerivationTree("B", seq);
+      renderTree(document.getElementById("treeT"), treeT);
+      renderTree(document.getElementById("treeB"), treeB);
+
+      setStatusFromKey(match ? "status.witness_ambiguity" : "status.no_witness", {}, false);
+    }
+
+
+    // -----------------------------
+    // Bounded solver (PCP / MPCP)
+    // -----------------------------
+    function setSolverProgressText(txt) {
+      const el = document.getElementById("solverProgress");
+      if (el) el.textContent = txt || "";
+    }
+    function setSolverResultText(txt) {
+      const el = document.getElementById("solverResult");
+      if (el) el.textContent = txt || "";
+    }
+    function setSolverUIRunning(running) {
+      solverRunning = running;
+      const solveBtn = document.getElementById("solveBtn");
+      const cancelBtn = document.getElementById("cancelSolveBtn");
+      const loadBtn = document.getElementById("loadSolutionBtn");
+      if (solveBtn) solveBtn.disabled = running;
+      if (cancelBtn) cancelBtn.disabled = !running;
+      if (loadBtn) loadBtn.disabled = running || !lastSolverSolution;
+    }
+
+
+    function updateSolverTitle() {
+      const titleEl = document.getElementById("solverTitleText");
+      if (!titleEl) return;
+      const useMPCP = !!document.getElementById("toggleMPCP")?.checked;
+      const key = useMPCP ? "solver.title_mpcp" : "solver.title_pcp";
+      titleEl.setAttribute("data-i18n", key);
+      if (typeof window.applyI18n === "function") window.applyI18n();
+    }
+    function parsePositiveInt(id, fallback) {
+      const el = document.getElementById(id);
+      const v = parseInt(String(el?.value ?? ""), 10);
+      if (!Number.isFinite(v) || v <= 0) return fallback;
+      return v;
+    }
+
+    function lcpLen(a, b) {
+      const n = Math.min(a.length, b.length);
+      let i = 0;
+      while (i < n && a[i] === b[i]) i++;
+      return i;
+    }
+
+    function updateDiff(cfg, t, b) {
+      // cfg: { side: 'equal'|'top'|'bottom', suffix: string }
+      let topExtra = "";
+      let botExtra = "";
+      if (cfg.side === "equal") {
+        topExtra = t;
+        botExtra = b;
+      } else if (cfg.side === "top") {
+        topExtra = cfg.suffix + t;
+        botExtra = b;
+      } else { // bottom
+        topExtra = t;
+        botExtra = cfg.suffix + b;
+      }
+
+      const l = lcpLen(topExtra, botExtra);
+      topExtra = topExtra.slice(l);
+      botExtra = botExtra.slice(l);
+
+      if (topExtra.length === 0 && botExtra.length === 0) return { side: "equal", suffix: "" };
+      if (topExtra.length > 0 && botExtra.length === 0) return { side: "top", suffix: topExtra };
+      if (botExtra.length > 0 && topExtra.length === 0) return { side: "bottom", suffix: botExtra };
+      // If both remain non-empty, mismatch (shouldn't happen after removing LCP unless alph differs at first char)
+      return null;
+    }
+
+    async function runBoundedSolver() {
+      if (dominoes.length === 0) {
+        setStatusFromKey("status.need_dominoes", {}, true);
+        return;
+      }
+      solverCancelRequested = false;
+      lastSolverSolution = null;
+      setSolverResultText("");
+      setSolverProgressText("");
+
+      const maxDepth = parsePositiveInt("solverDepth", 20);
+      const timeLimit = parsePositiveInt("solverTime", 1500);
+      const nodeLimit = parsePositiveInt("solverNodes", 200000);
+      const useMPCP = !!document.getElementById("toggleMPCP")?.checked;
+
+      const t0 = performance.now();
+      let nodes = 0;
+
+      function limitHit() {
+        if (solverCancelRequested) return true;
+        if (nodes >= nodeLimit) return true;
+        if ((performance.now() - t0) >= timeLimit) return true;
+        return false;
+      }
+
+      // Depth-first search with iterative deepening
+      function dfs(cfg, depthLeft, path) {
+        if (limitHit()) return null;
+
+        // success: exact match (cfg equal) and non-empty path
+        if (cfg.side === "equal" && path.length > 0) return path.slice();
+
+        if (depthLeft === 0) return null;
+
+        for (let i = 1; i <= dominoes.length; i++) {
+          nodes++;
+          if (limitHit()) return null;
+
+          const d = dominoes[i - 1];
+          const nextCfg = updateDiff(cfg, d.top, d.bottom);
+          if (!nextCfg) continue;
+
+          path.push(i);
+          const sol = dfs(nextCfg, depthLeft - 1, path);
+          if (sol) return sol;
+          path.pop();
+        }
+        return null;
+      }
+
+      setSolverUIRunning(true);
+      try {
+        // If MPCP: force first domino = 1
+        let startPath = [];
+        let startCfg = { side: "equal", suffix: "" };
+        let startDepthUsed = 0;
+        if (useMPCP) {
+          if (dominoes.length < 1) return;
+          const d1 = dominoes[0];
+          const cfg1 = updateDiff({ side: "equal", suffix: "" }, d1.top, d1.bottom);
+          if (!cfg1) {
+            setSolverResultText(window.t("solver.no_solution_found"));
+            return;
+          }
+          startPath = [1];
+          startCfg = cfg1;
+          startDepthUsed = 1;
+        }
+
+        for (let depth = startDepthUsed; depth <= maxDepth; depth++) {
+          if (limitHit()) break;
+          setSolverProgressText(window.t("solver.progress_depth", { D: depth, N: nodes }));
+
+          const path = startPath.slice();
+          const sol = dfs(startCfg, depth - startDepthUsed, path);
+
+          if (sol) {
+            lastSolverSolution = sol;
+            setSolverResultText(window.t("solver.solution_found", { SEQ: sol.join(",") }));
+            const loadBtn = document.getElementById("loadSolutionBtn");
+            if (loadBtn) loadBtn.disabled = false;
+            setSolverProgressText(window.t("solver.done", { N: nodes }));
+            setStatusFromKey("status.solver_found", {}, false);
+            return;
+          }
+
+          // Yield so UI can update (and cancel can be clicked)
+          await new Promise(r => setTimeout(r, 0));
+        }
+
+        // No solution within bounds (or limits hit)
+        if (solverCancelRequested) {
+          setSolverResultText(window.t("solver.cancelled"));
+          setStatusFromKey("status.solver_cancelled", {}, true);
+        } else if (nodes >= nodeLimit) {
+          setSolverResultText(window.t("solver.node_limit_hit"));
+          setStatusFromKey("status.solver_limits", {}, true);
+        } else if ((performance.now() - t0) >= timeLimit) {
+          setSolverResultText(window.t("solver.time_limit_hit"));
+          setStatusFromKey("status.solver_limits", {}, true);
+        } else {
+          setSolverResultText(window.t("solver.no_solution_found"));
+          setStatusFromKey("status.solver_none", {}, false);
+        }
+        setSolverProgressText(window.t("solver.done", { N: nodes }));
+      } finally {
+        setSolverUIRunning(false);
+      }
+    }
+
+    function cancelSolver() {
+      solverCancelRequested = true;
+    }
+
+    function loadSolverSolutionIntoWorkspace() {
+      if (!lastSolverSolution || !Array.isArray(lastSolverSolution)) return;
+      workspaceSeq = [];
+      workspaceSeq = lastSolverSolution.slice();
+      renderWorkspace();
+      concatWorkspaceStrings();
+      setStatusFromKey("status.solver_loaded", {}, false);
+    }
+
+
+    // -----------------------------
+    // Events
+    // -----------------------------
+    function onDominoesChanged(rebuildOutputs = true) {
+      initWorkspaceDnD();
+      renderDominoPalette();
+      refreshGrammarBox();
+              renderWorkspace();
+        concatWorkspaceStrings();
+renderWorkspace();
+      concatWorkspaceStrings();
+      if (rebuildOutputs) {
+        // Clear derivation outputs (avoid stale results)
+        // Also reset workspace + solver (domino identities may have changed)
+        workspaceSeq = [];
+        renderWorkspace();
+        concatWorkspaceStrings();
+        lastSolverSolution = null;
+        const loadBtn = document.getElementById("loadSolutionBtn");
+        if (loadBtn) loadBtn.disabled = true;
+        setSolverProgressText("");
+        setSolverResultText("");
+        document.getElementById("topConcat").textContent = "–";
+        document.getElementById("bottomConcat").textContent = "–";
+        document.getElementById("wordT").textContent = "–";
+        document.getElementById("wordB").textContent = "–";
+        document.getElementById("matchLine").textContent = "";
+        document.getElementById("treeT").innerHTML = "";
+        document.getElementById("treeB").innerHTML = "";
+      }
+
+      // Update status gently
+      if (dominoes.length === 0) setStatusFromKey("status.ready_empty", {}, false);
+      else setStatusFromKey("status.ready_k", { K: dominoes.length }, false);
+    }
+
+    document.getElementById("addDominoBtn").addEventListener("click", () => {
+      dominoes.push({ id: dominoes.length + 1, top: "", bottom: "" });
+      onDominoesChanged();
+    });
+
+    document.getElementById("clearDominoesBtn").addEventListener("click", () => {
+      dominoes = [];
+      onDominoesChanged();
+    });
+
+    document.getElementById("exportCsvBtn").addEventListener("click", () => {
+      if (!dominoes.length) {
+        setStatusFromKey("status.export_none", {}, true);
+        return;
+      }
+      let csv = "domino_id,top_string,bottom_string\n";
+      for (const d of dominoes) {
+        csv += `${d.id},${csvEscape(d.top)},${csvEscape(d.bottom)}\n`;
+      }
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "pcp_dominoes.csv";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      setStatusFromKey("status.export_ok", { K: dominoes.length }, false);
+    });
+
+    document.getElementById("csvFile").addEventListener("change", (ev) => {
+      const file = ev.target.files && ev.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const parsed = parseCsv(String(e.target.result || ""));
+          dominoes = parsed;
+          onDominoesChanged();
+          setStatusFromKey("status.import_ok", { K: dominoes.length }, false);
+        } catch (err) {
+          setStatusFromKey("status.import_fail", { ERR: err.message || String(err) }, true);
+        }
+      };
+      reader.readAsText(file);
+    });
+
+    document.getElementById("buildDerivBtn").addEventListener("click", buildDerivationsFromUI);
+
+    // Workspace sync buttons
+    document.getElementById("toWorkspaceBtn").addEventListener("click", () => {
+      // sequence input -> workspace (clear workspace first)
+      sendSeqInputToWorkspace();
+    });
+    document.getElementById("fromWorkspaceBtn").addEventListener("click", () => {
+      // workspace -> sequence input (clear seq input first)
+      sendWorkspaceToSeqInput();
+    });
+
+    // Workspace controls
+    document.getElementById("clearWorkspaceBtn").addEventListener("click", () => {
+      clearWorkspace();
+      setStatusFromKey("status.workspace_cleared", {}, false);
+    });
+    document.getElementById("wrapToggle").addEventListener("change", (ev) => {
+      setWrapMode(!!ev.target.checked);
+    });
+
+    document.getElementById("toggleMPCP").addEventListener("change", () => {
+      updateSolverTitle();
+    });
+
+    // Solver controls
+    document.getElementById("solveBtn").addEventListener("click", () => {
+      runBoundedSolver();
+    });
+    document.getElementById("cancelSolveBtn").addEventListener("click", () => {
+      cancelSolver();
+    });
+    document.getElementById("loadSolutionBtn").addEventListener("click", () => {
+      loadSolverSolutionIntoWorkspace();
+    });
+
+    document.getElementById("exampleBtn").addEventListener("click", () => {
+      // A small example (not necessarily solvable) just to show structure.
+      // You can replace with any classroom-friendly instance.
+      dominoes = [
+        { id: 1, top: "ab", bottom: "a" },
+        { id: 2, top: "b",  bottom: "bb" },
+        { id: 3, top: "a",  bottom: "ba" }
+      ];
+      onDominoesChanged();
+      document.getElementById("seqInput").value = "1,2";
+      setStatusFromKey("status.example_loaded", {}, false);
+    });
+
+    // Splitter (same feel as tm2pcp)
+    function setupSplitter() {
+      const container = document.querySelector(".split-container");
+      const leftPane = document.getElementById("leftPane");
+      const rightPane = document.getElementById("rightPane");
+      const divider = document.getElementById("divider");
+      if (!container || !leftPane || !rightPane || !divider) return;
+
+      let isDragging = false;
+      divider.addEventListener("mousedown", (e) => {
+        e.preventDefault();
+        isDragging = true;
+        document.body.style.userSelect = "none";
+      });
+      window.addEventListener("mouseup", () => {
+        if (isDragging) {
+          isDragging = false;
+          document.body.style.userSelect = "";
+        }
+      });
+      window.addEventListener("mousemove", (e) => {
+        if (!isDragging) return;
+        const rect = container.getBoundingClientRect();
+        let offsetX = e.clientX - rect.left;
+
+        const min = 260;
+        const max = rect.width - 260;
+        if (offsetX < min) offsetX = min;
+        if (offsetX > max) offsetX = max;
+
+        const leftPercent = (offsetX / rect.width) * 100;
+        const rightPercent = 100 - leftPercent;
+
+        leftPane.style.flex = `0 0 ${leftPercent}%`;
+        rightPane.style.flex = `0 0 ${rightPercent}%`;
+      });
+    }
+
+    // Language toggle
+    const langBtn = document.getElementById("langSwitch");
+    if (langBtn) {
+      langBtn.addEventListener("click", () => {
+        const cur = getCurrentLang();
+        const next = (cur === "pt-BR") ? "en" : "pt-BR";
+        window.setLanguage(next);
+        setCurrentLang(next);
+        refreshLangSwitchUI();
+
+        // re-render UI-dependent text
+        window.applyI18n();
+        renderDominoPalette();
+        refreshGrammarBox();
+        if (isHelpOpen()) renderHelpModal();
+      });
+    }
+
+    // Dark mode toggle
+    const darkBtn = document.getElementById("darkModeSwitch");
+    if (darkBtn) {
+      darkBtn.addEventListener("click", () => {
+        const isDark = !document.body.classList.contains("dark-mode");
+        toggleDarkMode(isDark);
+      });
+    }
+
+    // Init
+    applyDarkModeFromStorage();
+    window.initLanguageFromStorage("pcp2cfg-lang"); // uses storage key you pass
+    refreshLangSwitchUI();
+    refreshDarkModeSwitchUI();
+    setupSplitter();
+
+    initWorkspaceDnD();
+    // Init workspace + solver UI
+    setWrapMode(!!document.getElementById("wrapToggle")?.checked);
+    updateSolverTitle();
+
+    onDominoesChanged();
+  </script>
+
+  <footer class="app-footer">
+    <div class="footer-inner">
+      <div>
+        © <span id="footer-year"></span>
+        <a href="https://brunogrisci.github.io/" target="_blank" rel="noreferrer">Prof. Bruno Iochins Grisci</a>
+        — pcp2cfg (PCP → CFG Ambiguity).
+      </div>
+      <div>
+        <span data-i18n="footer.note">Educational tool; no decision procedure for undecidable problems.</span>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    // Footer year
+    const y = new Date().getFullYear();
+    document.getElementById("footer-year").textContent = String(y);
+  </script>
+</body>
+</html>
